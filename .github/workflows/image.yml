@@ -1,0 +1,66 @@
+name: 'Build Images'
+
+on:
+  push:
+    branches:
+    - master
+  pull_request: []
+
+jobs:
+  build:
+    name: 'Build Images'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.PAT }}
+      - name: Read DinD Version
+        id: dind_version
+        uses: juliangruber/read-file-action@v1
+        with:
+          path: ./dind/VERSION
+      - name: Read KinD Version
+        id: kind_version
+        uses: juliangruber/read-file-action@v1
+        with:
+          path: ./kind-cluster/VERSION
+      - name: Read KinD Node Version
+        id: kind_node_version
+        uses: juliangruber/read-file-action@v1
+        with:
+          path: ./kind-cluster/node/VERSION
+      - name: Build DinD Image
+        uses: docker/build-push-action@v2
+        with:
+          context: dind
+          file: dind/Dockerfile.buster
+          tags: ghcr.io/${{ github.actor }}/dind:${{ steps.dind_version.outputs.content }}
+          push: true
+          labels: |-
+            org.opencontainers.image.source=https://github.com/jim3ma/kind-docker-images
+      - name: Build KinD Image
+        uses: docker/build-push-action@v2
+        with:
+          context: kind-cluster
+          file: kind-cluster/Dockerfile.buster
+          tags: ghcr.io/${{ github.actor }}/kind:${{ steps.kind_version.outputs.content }}
+          push: true
+          build-args: |-
+            DIND_VERSION=${{ steps.dind_version.outputs.content }}
+          labels: |-
+            org.opencontainers.image.source=https://github.com/jim3ma/kind-docker-images
+      - name: Build KinD Node Image
+        uses: docker/build-push-action@v2
+        with:
+          context: kind-cluster/node
+          tags: ghcr.io/${{ github.actor }}/kind-node:${{ steps.kind_node_version.outputs.content }}
+          push: true
+          labels: |-
+            org.opencontainers.image.source=https://github.com/jim3ma/kind-docker-images
